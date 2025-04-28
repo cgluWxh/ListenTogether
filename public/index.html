@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>一起听</title>
+    <link rel="manifest" href="static/manifest.json?cache">
+    <link rel="stylesheet" href="static/style.css?cache">
+</head>
+
+<body>
+    <div id="app">
+        <div class="ltvbox">
+            <div class="cglbox" v-if="!server_status">
+                <div id="info" class="cglbox-content">
+                    <div id="status" style="color: red;font-size:1.2em;padding:1em;">
+                        服务器已断开。<br />如果您手动停止或定时停止了播放，请刷新页面以回到房间。若没有，您可以等待重连，若超过30秒仍未成功，请刷新页面以重连。</div>
+                </div>
+            </div>
+            <div class="cglbox">
+                <div class="pbox cglbox-content nowplaying">
+                    <div class="pbox-content nowplaying">
+                        <div v-if="musicExtra.playing">
+                            <div class="songbox">
+                                <div id="songCoverParent">
+                                    <div id="songCover">
+                                        <img :src="musicExtra.playing.cover.replace('http://','https://')" alt="cover">
+                                    </div>
+                                </div>
+
+                                <div class="song-moreInfo">
+                                    <span class="song-name">{{musicExtra.playing.name}}</span>
+                                    <span class="song-artists">{{musicExtra.playing.artists}}</span>
+                                </div>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar"
+                                    :style="{'--progress':musicProgress*100+'%'}"
+                                    @mousedown="progressEvtProcessor($event)"
+                                    @mouseup="progressEvtProcessor($event)"
+                                    @mousemove="progressEvtProcessor($event)"
+                                    @touchstart="progressEvtProcessor($event)"
+                                    @touchend="progressEvtProcessor($event)"
+                                    @touchmove="progressEvtProcessor($event)">
+                                </div>
+                                <div class="progress-time">
+                                    <div class="currentTime">{{currentTimeDisplay}}</div>
+                                    <div class="duration">{{durationDisplay}}</div>
+                                </div>
+                            </div>
+                            <div class="controller">
+                                <span class="controller-button txtbtn" @click="toSong(-1)">
+                                    <img src="static/previous.svg?cache" alt="previous">
+                                </span>
+                                <span class="controller-button txtbtn" @click="togglePlayPause">
+                                    <img src="static/play.svg?cache" alt="play" v-if="musicExtra.paused">
+                                    <img src="static/pause.svg?cache" alt="pause" v-else>
+                                </span>
+                                <span class="controller-button txtbtn" @click="toSong(1)">
+                                    <img src="static/next.svg?cache" alt="next">
+                                </span>
+                            </div>
+                            <div class="lyrics" v-if="settings.showLyrics">
+                                <div class="lyricLine"></div>
+                                <div class="lyricLine"></div>
+                                <div :class="{lyricLine: true, lyricLineActive: lyric && lyric.active}"
+                                    v-for="(lyric,index) in musicExtra.lyricData">
+                                    <span class="lyricMain">{{(lyric&&lyric.lrc) ? lyric.lrc : ""}}</span>
+                                    <span class="lyricTranslate"
+                                        v-if="settings.showTranslate">{{(lyric&&lyric.translate) ?
+                                        lyric.translate
+                                        : ""}}</span>
+                                    <span class="lyricRomaji" v-if="settings.showRomaji">{{(lyric&&lyric.romaji) ?
+                                        lyric.romaji :
+                                        ""}}</span>
+                                </div>
+                                <div class="lyricLine"></div>
+                                <div class="lyricLine"></div>
+                            </div>
+                        </div>
+
+                        <div v-else>
+                            未在播放
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="cglbox">
+                <div style="padding: .5em 0;">
+                    当前房间: {{roomId}}
+                </div>
+                <div class="cglbox-title" style="display: flex;flex-direction: row;justify-content: space-around;">
+                    <span @click="panelChoice=3" class="txtbtn">列表</span>
+                    <span @click="panelChoice=4" class="txtbtn">对讲{{voiceOngoing?'中':''}}</span>
+                    <span @click="panelChoice=5" class="txtbtn">消息{{unreadMsgCount?' ('+unreadMsgCount+')':''}}</span>
+                </div>
+            </div>
+            <div class="cglbox">
+                <div class="cglbox-title">
+                    设置
+                </div>
+                <div class="pbox cglbox-content">
+                    <div class="pbox-content settings">
+                        <button class="pbox-item" class="pbox-item" @click="updateTimedStop()">{{timedStopStr}}</button>
+                        <button class="pbox-item" class="pbox-item" @click="refreshCache()">清除缓存并更新</button>
+                        <div class="pbox-item" class="pbox-item" style="height:fit-content;">
+                            <input type="checkbox" name="showLyrics" id="showLyrics" v-model="settings.showLyrics">
+                            <label for="showLyrics">显示歌词（若有）</label>
+                            <div v-if="settings.showLyrics">
+                                <div style="display: inline-block;"><input type="checkbox" name="showTranslate"
+                                        id="showTranslate" v-model="settings.showTranslate">
+                                    <label for="showTranslate">显示翻译（若有）</label>
+                                </div>
+                                <div style="display: inline-block;"><input type="checkbox" name="showRomaji"
+                                        id="showRomaji" v-model="settings.showRomaji">
+                                    <label for="showRomaji">显示罗马音（若有）</label>
+                                </div><br />
+                                <div style="display: inline-block;"><input type="checkbox" name="bluetoothLyrics"
+                                        id="bluetoothLyrics" v-model="settings.bluetoothLyrics">
+                                    <label for="bluetoothLyrics">歌词同步蓝牙设备</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pbox-item" class="pbox-item" style="height:fit-content;">
+                            <input type="checkbox" name="notifyEnabled" id="notifyEnabled"
+                                v-model="settings.notifyEnabled">
+                            <label for="notifyEnabled">全局通知</label>
+                        </div>
+                        <div class="pbox-item"><span>对讲时语音增益: </span><input type="text" class="colored"
+                                placeholder="0~+∞ 默认10" :value="settings.voiceGainValue" @input="settings.voiceGainValue=parseFloat($event.target.value) || $event.target.value" @blur="settings.voiceGainValue=settings.voiceGainValue || 10"></div>
+                        <div class="pbox-item"><span>对讲时音乐增益: </span><input type="text" class="colored"
+                                placeholder="0~1 默认0.1" :value="settings.musicGainValueOnVoice" @input="settings.musicGainValueOnVoice=parseFloat($event.target.value) || $event.target.value" @blur="settings.musicGainValueOnVoice=settings.musicGainValueOnVoice || 0.1"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="cglpadding"></div>
+        </div>
+
+        <div class="ltvbox">
+            <Transition name="fade">
+                <div v-show="panelChoice!=0" class="overlay" :class="{stayBottom:panelChoice!=9999}">
+                    <div class="overlay-content" :class="{stayBottom:panelChoice!=9999, msgMode:panelChoice==5}">
+                        <div id="panelTitle">
+                            <span class="back-button txtbtn"><span @click="panelChoice=panelLast"
+                                    v-if="panelLast">&lt;</span></span>
+                            <span>{{panelTitle}}</span>
+                            <span class="close-button txtbtn"><span v-if="panelChoice!=9999"
+                                    @click="panelChoice=0">×</span></span>
+                        </div>
+                        <div class="content">
+                            <div class="listController" v-if="[1,3].includes(panelChoice)">
+                                <div class="listController-item txtbtn" @click="songListTo(0)">↑</div>
+                                <div class="listController-item txtbtn" @click="songListTo(1)" v-if="panelChoice==3">⌖
+                                </div>
+                                <div class="listController-item txtbtn" @click="songListTo(2)">↓</div>
+                            </div>
+                            <div v-if="panelChoice==9999" class="initializePanel">
+                                <div class="pbox-item"><span>名字: </span><input type="text" class="colored"
+                                        v-model="userName"></div>
+                                <div class="pbox-item"><span>房间: </span><input type="text" class="colored"
+                                        placeholder="若输入不存在的房间则创建新房间" v-model="roomId"></div>
+                                <div class="pbox-item colorSelector">
+                                    <span v-for="color in colors">
+                                        <input type="radio" :name="color.slice(1)" :id="color.slice(1)"
+                                            v-model="myColor" :value="color">
+                                        <label :for="color.slice(1)" :class="{colorSelected:myColor==color}"
+                                            :style="{'--currentColor':color}"></label>
+                                    </span>
+                                </div>
+                                <div class="pbox-item"><span>颜色: </span><input type="text" class="colored"
+                                        placeholder="输入 16 进制颜色码或在上方选择" v-model="myColor"></div>
+                                <button class="pbox-item" @click="doInitialize()">进入</button>
+                            </div>
+                            <div v-if="panelChoice==1">
+                                <div class="pbox cglbox-content">
+                                    <div class="pbox-content">
+                                        <div class="songbox-wrapper" v-for="(song,index) in panel.songs">
+                                            <div class="songbox" @contextmenu="tryAdjustCloud(index, song, $event)"
+                                                @click="addToQueue(song)">
+                                                <span class="song-index">{{index+1}}</span>
+                                                <div class="song-moreInfo">
+                                                    <span class="song-name">{{song.name}}</span>
+                                                    <span class="song-artists">{{song.artists}}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="pbox-item" @click="songListLoadMore()" v-if="panel.hasMore"
+                                            style="text-align:center;">加载更多</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="panelChoice==2">
+                                <input type="text" class="colored" placeholder="可混输歌名、艺术家、专辑名、歌词等" v-model="searchInput"
+                                    @keypress.enter="searchMusic()">
+                                <button class="pbox-item" @click="searchMusic()">搜索网易云音乐</button><br /><br />
+                                <input type="text" class="colored" placeholder="粘贴分享信息或 ID" v-model="searchInput2"
+                                    @keypress.enter="recognizeShareLink">
+                                <button class="pbox-item" @click="recognizeShareLink">识别并添加</button><br /><br />
+                                <button class="pbox-item" @click="openUserCloud()">音乐云盘</button>
+                                <!-- modify me -->
+                            </div>
+                            <div v-if="panelChoice==3">
+                                <div class="pbox cglbox-content">
+                                    <div class="pbox-content">
+                                        <button class="pbox-item" @click="panelChoice=2">添加歌曲</button>
+                                        <button class="pbox-item"
+                                            @click="switchPlayMode()">当前{{musicExtra.playMode=="RS"?"单曲循环":"顺序播放"}}，点击切换</button>
+                                        <button class="pbox-item" @click="randomizePlayList">随机化播放列表</button>
+                                        <div class="songbox-wrapper" v-for="(song,index) in musicExtra.playList">
+                                            <div :class="{songbox:true, active:musicExtra.playing && musicExtra.playing.id==song.id}"
+                                                @click="requestPlayNow(song)"
+                                                @contextmenu="removeFromQueue(song,$event)">
+                                                <span class="song-index">{{index+1}}</span>
+                                                <div class="song-moreInfo">
+                                                    <span class="song-name">{{song.name}}</span>
+                                                    <span class="song-artists">{{song.artists}}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="panelChoice==4">
+                                <div class="pbox cglbox-content">
+                                    <div class="pbox-content">
+                                        <button :class="{'pbox-item':true, active: allSpeaking}"
+                                            @click="recordingUI('all')">所有人</button>
+                                        <button :class="{'pbox-item':true, active: user.speaking}" v-for="user in users"
+                                            @click="recordingUI(user.id)">{{user.name}}</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="panelChoice==5">
+                                <div class="msgBox">
+                                    <div class="msg" v-for="msg in msgs"
+                                        :style="{backgroundColor:msg.color?msg.color:'none'}"
+                                        :class="getMsgComputedClass(msg)">
+                                        <span class="msgFrom">{{msg.from}}</span>
+                                        <span class="msgTime">{{genTime(msg.time-musicExtra.timeOffset)}}</span>
+                                        <span class="msgText">{{msg.msg}}</span>
+                                    </div>
+                                </div>
+                                <div class="pbox-item msgInput">
+                                    <input type="text" class="colored" v-model="textMsg" @keypress.enter="sendTextMsg">
+                                    <button @click="sendTextMsg">&gt;</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </div>
+    </div>
+
+    <script src="static/dep.min.js?cache"></script>
+    <script src="static/scripts.js?cache"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,14 @@
+{
+	"name": "一起听",
+	"short_name": "一起听",
+	"theme_color": "#7199ae",
+	"background_color": "#7199ae",
+	"icons": [{
+		"src": "/static/logo.png",
+		"sizes": "512x512",
+		"type": "image/png"
+	}],
+	"start_url": "/",
+	"display": "standalone",
+	"id": "ListenTogether"
+}
